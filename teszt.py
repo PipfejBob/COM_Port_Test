@@ -1,4 +1,4 @@
-import serial, msvcrt, time, os, sys, datetime
+import serial, msvcrt, time, os, sys, datetime, configparser
 
 class Connection:
 	_counter = 0
@@ -50,50 +50,58 @@ class Connection:
 		self.COM_Port_A.close()
 		self.COM_Port_B.close()
 
-# PORT kiosztás
-COM_RS232_1 = "COM5"
-COM_RS232_2 = "COM6"
-COM_RS485_1 = "COM1"
-COM_RS485_2 = "COM4"
-COM_MOXA_P1 = "COM29"	# RS485
-COM_MOXA_P2 = "COM30"	# RS232
+def main():
+	try:
+		config = configparser.ConfigParser()
+		config.read('COMPT_config.ini')
+		CONN_list = []
+		for sec in config.sections():
+			Port_A = config[sec]['COM_PORT_A']
+			Port_B = config[sec]['COM_PORT_B']
+			BR = int(config[sec]['BAUD_RATE'])
+			MSG = config[sec]['TEST_MESSAGE']
+			# Connection létrehozása
+			CONN = Connection(Port_A, Port_B, BR, str.encode(MSG), sec)
+			CONN_list.append(CONN)
+	except Exception as e:
+		print(e)
+		print('Hiba a WT_config.ini beolvasása közben!')
+		print('A program működése leáll, a folytatáshoz nyomjon meg egy gombot...')
+		msvcrt.getch()
+		return
 
-# Connection létrehozása
-RS485 = Connection(COM_RS485_1, COM_RS485_2, 9600, b'swag, yolo!', "HW RS232")
-Emulated_RS232 = Connection(COM_RS232_1, COM_RS232_2, 9600, b'swag, yolo!', "Emulated RS232")
+	# Init
+	os.system('cls' if os.name=='nt' else 'clear')
+	start = time.time()
+	start_datetime = datetime.datetime.now()
+	i=0
+	end_row=Connection._counter*5
+	print("Communication started (" + str(start_datetime) + ")")
 
-# Init
-os.system('cls' if os.name=='nt' else 'clear')
-start = time.time()
-start_datetime = datetime.datetime.now()
-i=0
-end_row=Connection._counter*5
-print("Communication started (" + str(start_datetime) + ")")
+	while(True):	
+		for CONN in CONN_list:
+			CONN.PortA_to_PortB()
+			CONN.PortB_to_PortA()
 
-while(True):	
-	RS485.PortA_to_PortB()
-	RS485.PortB_to_PortA()
+		i+=1
 
-	Emulated_RS232.PortA_to_PortB()
-	Emulated_RS232.PortB_to_PortA()
+		if(time.time() - start > 0.5):
+			for CONN in CONN_list:
+				CONN.Print_Number_of_Msg(i)
+			start = time.time()
+		
+		if(msvcrt.kbhit()):
+			kb = int.from_bytes(msvcrt.getch(),'big')
+			text = "\n"*end_row + "Communication stopped by User (" + str(datetime.datetime.now()) + ")\n"
+			text += "Test duration: " + str(datetime.datetime.now() - start_datetime)
+			sys.stdout.write("\x1b7\x1b[%d;%df%s\x1b8" % (1, 1, text))
+			sys.stdout.flush()
+			print("\n"*end_row)
+			if kb == 27:
+				break
 
-	i+=1
+	for CONN in CONN_list:
+		CONN.Close_Ports()
 
-	if(time.time() - start > 0.5):
-		RS485.Print_Number_of_Msg(i)
-		Emulated_RS232.Print_Number_of_Msg(i)
-
-		start = time.time()
-	
-	if(msvcrt.kbhit()):
-		kb = int.from_bytes(msvcrt.getch(),'big')
-		text = "\n"*end_row + "Communication stopped by User (" + str(datetime.datetime.now()) + ")\n"
-		text += "Test duration: " + str(datetime.datetime.now() - start_datetime)
-		sys.stdout.write("\x1b7\x1b[%d;%df%s\x1b8" % (1, 1, text))
-		sys.stdout.flush()
-		print("\n"*end_row)
-		if kb == 27:
-			break
-
-RS485.Close_Ports()
-Emulated_RS232.Close_Ports()
+if __name__ == "__main__":
+	main()
